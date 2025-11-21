@@ -21,7 +21,12 @@ async def get_gemini_response(
         return "Error: Gemini API Key not configured"
         
     genai.configure(api_key=active_key)
-    gemini_model = genai.GenerativeModel(model)
+    
+    # Normalize model name - remove 'models/' prefix if present
+    # Gemini SDK expects just the model name, not the full path
+    normalized_model = model.replace("models/", "") if model else "gemini-1.5-flash"
+    
+    gemini_model = genai.GenerativeModel(normalized_model)
     
     # Construct system prompt with context
     base_prompt = """
