@@ -9,3 +9,5 @@ sqlalchemy
 passlib
 bcrypt==3.2.2
 python-jose[cryptography]
+tenacity==8.2.3
+

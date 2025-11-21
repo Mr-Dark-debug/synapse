@@ -76,9 +76,19 @@ async def extract(pdf_url: str):
 
 @router.post("/eli5")
 async def eli5(request: ELI5Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Validate API key
+    if not current_user.profile or not current_user.profile.gemini_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini API key not configured. Please add it in Settings."
+        )
+    
     try:
-        api_key = current_user.profile.gemini_api_key if current_user.profile else None
-        model_name = current_user.profile.preferred_model if current_user.profile else "gemini-1.5-flash"
+        api_key = current_user.profile.gemini_api_key
+        model_name = current_user.profile.preferred_model if current_user.profile.preferred_model else "gemini-1.5-flash"
         
         active_prompt = db.query(models.PromptTemplate).filter(
             models.PromptTemplate.user_id == current_user.id,
@@ -88,6 +98,8 @@ async def eli5(request: ELI5Request, current_user: models.User = Depends(get_cur
         
         system_instruction = active_prompt.content if active_prompt else None
         
+        logger.info(f"Processing ELI5 request for user {current_user.id}")
+        
         # Fallback prompt if no template
         if not system_instruction:
             prompt = f"Explain the following text like I'm 5 years old. Keep it simple, fun, and use analogies if possible:\n\n{request.text}"
@@ -95,19 +107,34 @@ async def eli5(request: ELI5Request, current_user: models.User = Depends(get_cur
         else:
             # Use template
             response = await get_gemini_response(request.text, api_key=api_key, model=model_name, system_instruction=system_instruction)
-            
+        
+        logger.info("ELI5 request completed successfully")
         return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (from gemini_service)
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"ELI5 error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"ELI5 error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate ELI5 explanation: {str(e)}")
 
 @router.post("/summarize")
 async def summarize(request: ELI5Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Validate API key
+    if not current_user.profile or not current_user.profile.gemini_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini API key not configured. Please add it in Settings."
+        )
+    
     try:
-        api_key = current_user.profile.gemini_api_key if current_user.profile else None
-        model_name = current_user.profile.preferred_model if current_user.profile else "gemini-1.5-flash"
+        api_key = current_user.profile.gemini_api_key
+        model_name = current_user.profile.preferred_model if current_user.profile.preferred_model else "gemini-1.5-flash"
         
         active_prompt = db.query(models.PromptTemplate).filter(
             models.PromptTemplate.user_id == current_user.id,
@@ -117,15 +144,22 @@ async def summarize(request: ELI5Request, current_user: models.User = Depends(ge
         
         system_instruction = active_prompt.content if active_prompt else None
         
+        logger.info(f"Processing Summarize request for user {current_user.id}")
+        
         if not system_instruction:
             prompt = f"Provide a comprehensive, professional academic summary of the following text. Highlight key findings, methodology, and implications:\n\n{request.text}"
             response = await get_gemini_response(prompt, api_key=api_key, model=model_name)
         else:
             response = await get_gemini_response(request.text, api_key=api_key, model=model_name, system_instruction=system_instruction)
-            
+        
+        logger.info("Summarize request completed successfully")
         return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (from gemini_service)
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"Summarize error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Summarize error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate summary: {str(e)}")

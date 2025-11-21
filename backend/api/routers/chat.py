@@ -101,12 +101,22 @@ async def send_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     session = db.query(ChatSession).filter(
         ChatSession.id == session_id,
         ChatSession.user_id == current_user.id
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Validate API key before proceeding
+    if not current_user.profile or not current_user.profile.gemini_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini API key not configured. Please add it in Settings."
+        )
     
     # Save user message
     user_msg = ChatMessage(
@@ -115,58 +125,60 @@ async def send_message(
         content=message_data.message
     )
     db.add(user_msg)
-    
-    # Get context from previous messages (last 10)
-    history = db.query(ChatMessage).filter(
-        ChatMessage.session_id == session_id
-    ).order_by(ChatMessage.created_at.desc()).limit(10).all()
-    
-    # Reverse to get chronological order
-    history = history[::-1]
-    
-    # Format history for Gemini
-    chat_history = []
-    for msg in history:
-        chat_history.append({"role": msg.role, "parts": [msg.content]})
-    
-    # Get AI response
-    # Note: We need to fetch paper content if paper_ids are provided.
-    # For now, we assume the frontend sends the context or we fetch it here.
-    # To keep it simple and fast, we'll rely on the existing research service logic 
-    # but adapted for history.
-    
-    # Actually, the existing research router handles context fetching. 
-    # We should probably reuse that logic or import the service.
-    # Let's assume get_gemini_response can handle history + new message + context.
-    
-    # Construct context string from papers (this part is tricky without the paper content)
-    # The frontend should probably send the paper content or we need to fetch it from arXiv/Semantic Scholar again?
-    # Or we store paper content in DB? We don't store full text in DB yet.
-    # For this iteration, we will assume the user provides the context in the message 
-    # OR we just chat without specific paper context if not provided.
-    
-    # Wait, the previous implementation sent context in the prompt.
-    # Let's look at research.py to see how it does it.
-    
-    ai_response_text = await get_gemini_response(
-        message_data.message,
-        current_user.profile.gemini_api_key,
-        model=current_user.profile.preferred_model,
-        history=chat_history,
-        context="" # We need to figure out context passing
-    )
-    
-    # Save AI message
-    ai_msg = ChatMessage(
-        session_id=session_id,
-        role="assistant",
-        content=ai_response_text
-    )
-    db.add(ai_msg)
-    
-    # Update session timestamp
-    session.updated_at = datetime.datetime.now()
-    
     db.commit()
     
-    return {"response": ai_response_text}
+    try:
+        # Get context from previous messages (last 10)
+        history = db.query(ChatMessage).filter(
+            ChatMessage.session_id == session_id
+        ).order_by(ChatMessage.created_at.desc()).limit(10).all()
+        
+        # Reverse to get chronological order
+        history = history[::-1]
+        
+        # Format history for Gemini (exclude the message we just added)
+        chat_history = []
+        for msg in history[:-1]:  # Exclude the last message (current user message)
+            chat_history.append({"role": msg.role, "parts": [msg.content]})
+        
+        logger.info(f"Sending message to Gemini for session {session_id}")
+        
+        # Get AI response - this now raises HTTPException on errors
+        ai_response_text = await get_gemini_response(
+            message_data.message,
+            current_user.profile.gemini_api_key,
+            model=current_user.profile.preferred_model,
+            history=chat_history,
+            context=""  # Context can be added from paper_ids if needed
+        )
+        
+        # Save AI message
+        ai_msg = ChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content=ai_response_text
+        )
+        db.add(ai_msg)
+        
+        # Update session timestamp
+        session.updated_at = datetime.datetime.now()
+        
+        db.commit()
+        
+        logger.info(f"Successfully generated response for session {session_id}")
+        return {"response": ai_response_text}
+        
+    except HTTPException:
+        # Roll back the transaction if there's an error
+        db.rollback()
+        # Re-raise the HTTP exception (already has proper status code and detail)
+        raise
+    except Exception as e:
+        # Roll back the transaction
+        db.rollback()
+        logger.error(f"Unexpected error in send_message: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while generating the response"
+        )
+
