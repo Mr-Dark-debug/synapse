@@ -28,14 +28,14 @@ Whether you're a PhD student, researcher, or just curious, Synapse acts as your 
   - Advanced filtering and sorting
   - Real-time results with rich metadata
 
-- **📚 Collections & Library**
-  - **NEW!** Organize papers into custom collections
+- **📚 Collections & Library** *NEW!*
+  - Organize papers into custom collections
   - Create unlimited collections for different projects/topics
   - Quick save papers from search results
   - Manage and browse your saved papers in the Library
 
-- **💬 AI Chat with Context**
-  - **NEW!** Multi-turn conversations with AI about papers
+- **💬 AI Chat with Context** *NEW!*
+  - Multi-turn conversations with AI about papers
   - Chat history saved and accessible across sessions
   - Provide paper context for more accurate responses
   - Session management (create, load, delete chat sessions)
