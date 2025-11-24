@@ -155,3 +155,18 @@ async def remove_item_from_collection(
     db.delete(item)
     db.commit()
     return {"message": "Item removed from collection"}
+
+# New endpoint to check if a paper is saved in any collection
+@router.get("/items/check/{paper_id}")
+async def check_paper_saved(
+    paper_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Check if the paper exists in any of the user's collections
+    item = db.query(CollectionItem).join(Collection).filter(
+        CollectionItem.paper_id == paper_id,
+        Collection.user_id == current_user.id
+    ).first()
+    
+    return {"saved": item is not None}

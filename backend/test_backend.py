@@ -35,8 +35,9 @@ def test_backend():
 
     # 3. Add Item to Collection
     print("\n3. Adding Item...")
+    paper_id = "2310.12345"
     item_data = {
-        "paper_id": "2310.12345",
+        "paper_id": paper_id,
         "paper_title": "Test Paper",
         "paper_summary": "This is a test paper."
     }
@@ -46,8 +47,33 @@ def test_backend():
     else:
         print(f"❌ Add item failed: {response.text}")
 
-    # 4. Create Chat Session
-    print("\n4. Creating Chat Session...")
+    # 4. Test the new check endpoint - paper should be saved
+    print("\n4. Testing check saved endpoint (saved paper)...")
+    response = requests.get(f"{BASE_URL}/collections/items/check/{paper_id}", headers=headers)
+    if response.status_code == 200:
+        result = response.json()
+        if result.get("saved") == True:
+            print("✅ Check saved endpoint working correctly for saved paper")
+        else:
+            print(f"❌ Check saved endpoint returned unexpected result: {result}")
+    else:
+        print(f"❌ Check saved endpoint failed: {response.text}")
+
+    # 5. Test the new check endpoint - paper should not be saved
+    print("\n5. Testing check saved endpoint (unsaved paper)...")
+    unsaved_paper_id = "9999.99999"
+    response = requests.get(f"{BASE_URL}/collections/items/check/{unsaved_paper_id}", headers=headers)
+    if response.status_code == 200:
+        result = response.json()
+        if result.get("saved") == False:
+            print("✅ Check saved endpoint working correctly for unsaved paper")
+        else:
+            print(f"❌ Check saved endpoint returned unexpected result: {result}")
+    else:
+        print(f"❌ Check saved endpoint failed: {response.text}")
+
+    # 6. Create Chat Session
+    print("\n6. Creating Chat Session...")
     response = requests.post(f"{BASE_URL}/chat/sessions", json={"title": "Test Chat"}, headers=headers)
     if response.status_code == 200:
         session_id = response.json()["id"]
@@ -56,8 +82,8 @@ def test_backend():
         print(f"❌ Create session failed: {response.text}")
         return
 
-    # 5. Send Message
-    print("\n5. Sending Message...")
+    # 7. Send Message
+    print("\n7. Sending Message...")
     msg_data = {"message": "Hello, how are you?", "paper_ids": []}
     # Note: This might fail if Gemini API key is not set, but we check for 500 or specific error
     response = requests.post(f"{BASE_URL}/chat/sessions/{session_id}/message", json=msg_data, headers=headers)
@@ -66,8 +92,8 @@ def test_backend():
     else:
         print(f"❌ Send message failed: {response.text}")
 
-    # 6. Get History
-    print("\n6. Getting History...")
+    # 8. Get History
+    print("\n8. Getting History...")
     response = requests.get(f"{BASE_URL}/chat/sessions/{session_id}", headers=headers)
     if response.status_code == 200:
         msgs = response.json()["messages"]

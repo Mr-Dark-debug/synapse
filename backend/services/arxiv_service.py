@@ -14,11 +14,21 @@ async def search_arxiv(query: str, start: int = 0, max_results: int = 10, sort_b
         "sortOrder": sort_order
     }
     
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        response = await client.get(ARXIV_API_URL, params=params)
-        response.raise_for_status()
-        
-    return parse_arxiv_response(response.text)
+    # Add timeout to prevent hanging
+    timeout = httpx.Timeout(10.0, connect=5.0)
+    
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            response = await client.get(ARXIV_API_URL, params=params)
+            response.raise_for_status()
+            
+        return parse_arxiv_response(response.text)
+    except httpx.TimeoutException:
+        raise Exception("Request to arXiv API timed out. Please try again later.")
+    except httpx.RequestError as e:
+        raise Exception(f"Network error while connecting to arXiv API: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Error fetching data from arXiv API: {str(e)}")
 
 async def get_random_paper():
     topics = [
